@@ -13,13 +13,13 @@ Modified by Haoyu Lu, for video diffusion transformer
 # 
 # --------------------------------------------------------
 
-import torch
-import torch.nn as nn
-import numpy as np
 import math
-from timm.models.vision_transformer import PatchEmbed, Attention, Mlp
+import numpy as np
 from einops import rearrange, reduce, repeat
 
+import torch
+import torch.nn as nn
+from timm.models.vision_transformer import PatchEmbed, Attention, Mlp
 
 def modulate(x, shift, scale, T):
 

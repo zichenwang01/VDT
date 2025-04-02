@@ -61,7 +61,7 @@ class MaskingGenerator:
         return delta
 
     def __call__(self):
-        mask = np.zeros(shape=self.get_shape(), dtype=np.int)
+        mask = np.zeros(shape=self.get_shape(), dtype=np.int32)
         mask_count = 0
         while mask_count < self.num_masking_patches:
             max_mask_patches = self.num_masking_patches - mask_count
@@ -88,7 +88,8 @@ class VideoMaskGenerator:
         self.backward_given_frame_length = 8
 
         # idx = 2 Interpreation
-        self.interpreation_step = 4
+        # self.interpreation_step = 4
+        self.interpreation_step = 8
 
         # idx = 5 MLM ratio
         self.mlm_ratio = 0.8
@@ -102,19 +103,27 @@ class VideoMaskGenerator:
         return self.length, self.height, self.width
 
     def spatial_mask(self):
-        mask = np.zeros(shape=self.get_shape(), dtype=np.int)
-
+        mask = np.zeros(shape=self.get_shape(), dtype=np.int32)
 
         start_idx = random.randint(0, 3)
         end_idx = random.randint(0, 3)
 
         spatial_mask = self.spatial_generator()
-        # print("start_idx, end_idx", start_idx, end_idx)
-        mask[start_idx:-end_idx] = spatial_mask
+        # mask[start_idx:-end_idx] = spatial_mask
+        mask = spatial_mask
+        return mask
+
+    def spatial_varying_mask(self):
+        mask = np.zeros(shape=self.get_shape(), dtype=np.int32)
+
+        for frame_idx in range(mask.shape[0]):
+            spatial_mask = self.spatial_generator()
+            mask[frame_idx] = spatial_mask
+
         return mask
 
     def temporal_mask(self, idx=0):
-        mask = np.zeros(shape=self.get_shape(), dtype=np.int)
+        mask = np.zeros(shape=self.get_shape(), dtype=np.int32)
         # Predict
         if idx == 0:
             mask[self.predict_given_frame_length:] = 1
@@ -123,29 +132,38 @@ class VideoMaskGenerator:
             mask[:-self.backward_given_frame_length] = 1
         # Interpreation
         elif idx == 2:
-            mask = np.ones(shape=self.get_shape(), dtype=np.int)
-            mask[::self.interpreation_step] = 0
+            # mask = np.ones(shape=self.get_shape(), dtype=np.int32)
+            # mask[::self.interpreation_step] = 0
+            mask = np.ones(shape=self.get_shape(), dtype=np.int32)
+            mask[0] = 0
+            mask[-1] = 0
         # Unconditional Generation
         elif idx == 3:
-            mask = np.ones(shape=self.get_shape(), dtype=np.int)
+            mask = np.ones(shape=self.get_shape(), dtype=np.int32)
         # Only one frames
         elif idx == 4:
             frame_idx = random.randint(0, mask.shape[0]-1)
-            mask = np.ones(shape=self.get_shape(), dtype=np.int)
+            mask = np.ones(shape=self.get_shape(), dtype=np.int32)
             mask[frame_idx] = 0
         # MLM
-        else:
+        elif idx == 5:
             for frame_idx in range(mask.shape[0]):
                 if random.random() < self.mlm_ratio:
                     mask[frame_idx] = 1
+        else:
+            raise ValueError("Invalid index for temporal mask generation.")
         return mask
 
     def __call__(self, batch_size=1, device=None, idx=-1):
         if idx >= 0:
             if idx < 6:
                 mask = self.temporal_mask(idx)
-            else:
+            elif idx == 6:
                 mask = self.spatial_mask()
+            elif idx == 7:
+                mask = self.spatial_varying_mask()
+            else:
+                raise ValueError("Invalid index for mask generation.")
             return torch.tensor(mask).unsqueeze(0).repeat(batch_size,1,1,1).to(device)
 
         if random.random() < 0.2:
